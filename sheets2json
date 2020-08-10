@@ -1,0 +1,40 @@
+#!/usr/bin/env python3
+
+import logging
+import gspread, json
+from env import *
+from oauth2client.service_account import ServiceAccountCredentials
+import pysftp
+
+# setup gspread
+scope = ['https://spreadsheets.google.com/feeds','https://www.googleapis.com/auth/drive']
+creds = ServiceAccountCredentials.from_json_keyfile_name('secret.json', scope)
+gclient = gspread.authorize(creds)
+
+#setup logger
+logger = logging.getLogger('sheets2json')
+logger.setLevel(logging.DEBUG)
+handler = logging.FileHandler(filename='sheets2json.log', encoding='utf-8', mode='w')
+handler.setFormatter(logging.Formatter('%(asctime)s:%(levelname)s:%(name)s: %(message)s'))
+logger.addHandler(handler)
+
+def getData(filename, evenementen, organisaties):
+    data = gclient.open(filename)
+    evenementen = data.worksheet(evenementen)
+    organisaties = data.worksheet(organisaties)
+    event_output = evenementen.get_all_records()
+    orga_output = organisaties.get_all_records()
+    with open('evenementen.json', 'w') as tempfile:
+        json.dump(event_output, tempfile)
+    with open('organisaties.json', 'w') as tempfile:
+        json.dump(orga_output, tempfile)
+
+def transferData():
+    srv = pysftp.Connection(host=SFTP_HOST, username=SFTP_USER, password=SFTP_PASS,log="pysftp.log")
+    with srv.cd(SFTP_CWD): 
+        srv.put('evenementen.json')
+        srv.put('organisaties.json')
+    srv.close()
+
+getData(FILENAME, EVENEMENTEN_SHEET, ORGANISATIE_SHEET)
+transferData()
